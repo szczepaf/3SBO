@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ tournament.name }} — Turnover Stats{% endblock %}
+{% block title %}{{ tournament.name }} — 3SB Stats{% endblock %}
 {% block content %}
 <p class="breadcrumb"><a href="/">Tournaments</a> / {{ tournament.name }}</p>
 <h1>{{ tournament.name }}</h1>
@@ -17,14 +17,7 @@
 
 {% if matches %}
 <table>
-    <thead>
-        <tr>
-            <th>Opponent</th>
-            <th>Points</th>
-            <th>Passes</th>
-            <th></th>
-        </tr>
-    </thead>
+    <thead><tr><th>opponent</th><th>points</th><th>passes</th><th></th></tr></thead>
     <tbody>
         {% for m in matches %}
         <tr>

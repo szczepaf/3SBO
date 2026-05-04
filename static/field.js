@@ -104,9 +104,14 @@
 
     // ---- Pass color logic ----
 
+    function isScore(p) {
+        if (p.is_turnover) return false;
+        if (p.direction === "right") return p.x2 > FIELD_W - EZ_DEPTH;
+        return p.x2 < EZ_DEPTH;
+    }
+
     function passColor(p) {
         if (p.is_turnover) return "#c62828"; // red
-        if (p.is_score) return "#1a1a1a";    // black for score
         const forward = p.direction === "right" ? p.x2 > p.x1 : p.x2 < p.x1;
         return forward ? "#2e7d32" : "#1565c0"; // green : blue
     }
@@ -139,7 +144,7 @@
                     stroke: color, "stroke-width": 1.5, "stroke-opacity": 0.7
                 }));
 
-                if (p.is_score) {
+                if (isScore(p)) {
                     // Score: circle at destination
                     g.appendChild(doc("circle", {
                         cx: p.x2, cy: p.y2, r: 6,
@@ -259,14 +264,12 @@
                 svg.appendChild(tmp);
             } else {
                 const isTurnover = document.getElementById("toggle-turnover").checked;
-                const isScore = document.getElementById("toggle-score").checked;
                 const data = {
                     point_id: activePointId,
                     x1: drawState.x1, y1: drawState.y1,
                     x2: pt.x, y2: pt.y,
                     direction: offenseDir,
                     is_turnover: isTurnover ? 1 : 0,
-                    is_score: isScore ? 1 : 0,
                     comment: ""
                 };
                 drawState = null;
@@ -285,9 +288,7 @@
                         const ptObj = points.find(p => p.id === activePointId);
                         if (ptObj) ptObj.passes.push(data);
                         renderPasses();
-                        // Uncheck turnover/score after adding
                         document.getElementById("toggle-turnover").checked = false;
-                        document.getElementById("toggle-score").checked = false;
                     });
             }
         });

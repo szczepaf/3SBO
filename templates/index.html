@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Tournaments — Turnover Stats{% endblock %}
+{% block title %}Tournaments — 3SB Stats{% endblock %}
 {% block content %}
 <h1>Tournaments</h1>
 
@@ -10,13 +10,7 @@
 
 {% if tournaments %}
 <table>
-    <thead>
-        <tr>
-            <th>Name</th>
-            <th>Matches</th>
-            <th></th>
-        </tr>
-    </thead>
+    <thead><tr><th>name</th><th>matches</th><th></th></tr></thead>
     <tbody>
         {% for t in tournaments %}
         <tr>

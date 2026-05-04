@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}vs {{ match.opponent }} — Turnover Stats{% endblock %}
+{% block title %}vs {{ match.opponent }} — 3SB Stats{% endblock %}
 {% block content %}
 <p class="breadcrumb">
     <a href="/">Tournaments</a> /
@@ -9,19 +9,17 @@
 <h1>vs {{ match.opponent }}</h1>
 
 <div class="points-bar">
-    <span class="points-label">Points:</span>
     <div id="point-tabs" class="point-tabs"></div>
-    <button id="btn-add-point" class="btn-small">+ point</button>
-    <button id="btn-blend-points" class="btn-small">blend all</button>
-    <button id="btn-delete-point" class="btn-small btn-delete" style="margin-left:auto;">delete point</button>
+    <button id="btn-add-point">+ point</button>
+    <button id="btn-blend-points">blend all</button>
+    <button id="btn-delete-point" class="btn-delete" style="margin-left:auto;">delete point</button>
 </div>
 
 <div class="field-controls">
     <label><input type="checkbox" id="toggle-arrows" checked> Show arrows</label>
     <button id="btn-direction" title="Flip offense direction">Offense &#8594;</button>
     <button id="btn-undo">Undo last pass</button>
-    <label class="turnover-toggle"><input type="checkbox" id="toggle-turnover"> Turnover</label>
-    <label class="score-toggle"><input type="checkbox" id="toggle-score"> Score</label>
+    <label><input type="checkbox" id="toggle-turnover"> Turnover</label>
     <button id="btn-export-pdf">Export PDF</button>
 </div>
 

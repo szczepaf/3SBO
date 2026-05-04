@@ -169,11 +169,10 @@ def pass_add():
                      (point_id,)).fetchone()
     seq = row["mx"] + 1
     cur = db.execute(
-        "INSERT INTO pass (point_id, seq, x1, y1, x2, y2, direction, is_turnover, is_score, comment) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO pass (point_id, seq, x1, y1, x2, y2, direction, is_turnover, comment) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (point_id, seq, data["x1"], data["y1"], data["x2"], data["y2"],
-         data["direction"], int(data.get("is_turnover", 0)),
-         int(data.get("is_score", 0)), data.get("comment", ""))
+         data["direction"], int(data.get("is_turnover", 0)), data.get("comment", ""))
     )
     db.commit()
     pass_id = cur.lastrowid

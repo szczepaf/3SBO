@@ -43,7 +43,6 @@ def init_db():
             y2 REAL NOT NULL,
             direction TEXT NOT NULL DEFAULT 'right',
             is_turnover INTEGER NOT NULL DEFAULT 0,
-            is_score INTEGER NOT NULL DEFAULT 0,
             comment TEXT DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (point_id) REFERENCES point(id) ON DELETE CASCADE
