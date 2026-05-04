@@ -50,4 +50,11 @@ def init_db():
         );
     """)
     conn.commit()
+
+    # Migrations for existing databases
+    cols = [row[1] for row in conn.execute("PRAGMA table_info(point)").fetchall()]
+    if "offense_dir" not in cols:
+        conn.execute("ALTER TABLE point ADD COLUMN offense_dir TEXT NOT NULL DEFAULT 'right'")
+        conn.commit()
+
     conn.close()
