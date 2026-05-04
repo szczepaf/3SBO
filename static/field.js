@@ -182,6 +182,28 @@
                 }
             }
 
+            // Turnover midpoint dot
+            if (p.is_turnover) {
+                const mx = (p.x1 + p.x2) / 2;
+                const my = (p.y1 + p.y2) / 2;
+                topLayer.appendChild(doc("circle", {
+                    cx: mx, cy: my, r: 4,
+                    fill: color, class: "turnover-dot"
+                }));
+                const midHit = doc("circle", {
+                    cx: mx, cy: my, r: 12,
+                    fill: "transparent", stroke: "none", class: "drag-handle",
+                    style: "cursor:pointer"
+                });
+                topLayer.appendChild(midHit);
+                if (!isBlended && !blendingPoints) {
+                    midHit.addEventListener("click", function (e) {
+                        e.stopPropagation();
+                        selectPass(p);
+                    });
+                }
+            }
+
             // Drag handles in top layer too
             const originHandle = doc("circle", {
                 cx: p.x1, cy: p.y1, r: 12,
