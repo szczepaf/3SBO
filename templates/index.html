@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Tournaments — Turnover Stats{% endblock %}
+{% block content %}
+<h1>Tournaments</h1>
+
+<form method="post" action="{{ url_for('tournament_new') }}" class="inline-form">
+    <input type="text" name="name" placeholder="Tournament name" required>
+    <button type="submit">Add</button>
+</form>
+
+{% if tournaments %}
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Matches</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for t in tournaments %}
+        <tr>
+            <td><a href="{{ url_for('tournament', tid=t.id) }}">{{ t.name }}</a></td>
+            <td>{{ t.match_count }}</td>
+            <td>
+                <form method="post" action="{{ url_for('tournament_delete', tid=t.id) }}" class="inline"
+                      onsubmit="return confirm('Delete tournament and all its matches?')">
+                    <button type="submit" class="btn-delete">delete</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="empty">No tournaments yet.</p>
+{% endif %}
+{% endblock %}

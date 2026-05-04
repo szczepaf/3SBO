@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}vs {{ match.opponent }} — Turnover Stats{% endblock %}
+{% block content %}
+<p class="breadcrumb">
+    <a href="/">Tournaments</a> /
+    <a href="{{ url_for('tournament', tid=tournament.id) }}">{{ tournament.name }}</a> /
+    vs {{ match.opponent }}
+</p>
+<h1>vs {{ match.opponent }}</h1>
+
+<div class="points-bar">
+    <span class="points-label">Points:</span>
+    <div id="point-tabs" class="point-tabs"></div>
+    <button id="btn-add-point" class="btn-small">+ point</button>
+    <button id="btn-blend-points" class="btn-small">blend all</button>
+    <button id="btn-delete-point" class="btn-small btn-delete" style="margin-left:auto;">delete point</button>
+</div>
+
+<div class="field-controls">
+    <label><input type="checkbox" id="toggle-arrows" checked> Show arrows</label>
+    <button id="btn-direction" title="Flip offense direction">Offense &#8594;</button>
+    <button id="btn-undo">Undo last pass</button>
+    <label class="turnover-toggle"><input type="checkbox" id="toggle-turnover"> Turnover</label>
+    <label class="score-toggle"><input type="checkbox" id="toggle-score"> Score</label>
+    <button id="btn-export-pdf">Export PDF</button>
+</div>
+
+<div class="field-wrap">
+    <svg id="field" viewBox="0 0 1000 467" xmlns="http://www.w3.org/2000/svg"></svg>
+</div>
+
+<div id="comment-box" class="comment-box hidden">
+    <textarea id="comment-text" rows="3" placeholder="Add a comment..."></textarea>
+    <div class="comment-actions">
+        <button id="comment-save">Save</button>
+        <button id="comment-delete" class="btn-delete">Delete pass</button>
+        <button id="comment-close">Close</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const MATCH_ID = {{ match.id }};
+    const INITIAL_POINTS = {{ points|tojson }};
+</script>
+<script src="{{ url_for('static', filename='field.js') }}"></script>
+{% endblock %}

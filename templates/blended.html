@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}{{ tournament.name }} — Blended — Turnover Stats{% endblock %}
+{% block content %}
+<p class="breadcrumb">
+    <a href="/">Tournaments</a> /
+    <a href="{{ url_for('tournament', tid=tournament.id) }}">{{ tournament.name }}</a> /
+    Blended
+</p>
+<h1>{{ tournament.name }} — All matches</h1>
+<p>{{ matches|length }} matches, {{ passes|length }} turnovers</p>
+
+<div class="field-controls">
+    <label><input type="checkbox" id="toggle-arrows" checked> Show arrows</label>
+    <button id="btn-export-pdf">Export PDF</button>
+</div>
+
+<div class="field-wrap">
+    <svg id="field" viewBox="0 0 1000 467" xmlns="http://www.w3.org/2000/svg"></svg>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const MATCH_ID = null;
+    const INITIAL_PASSES = {{ passes|tojson }};
+    const BLENDED = true;
+</script>
+<script src="{{ url_for('static', filename='field.js') }}"></script>
+{% endblock %}

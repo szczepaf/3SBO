@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}{{ tournament.name }} — Turnover Stats{% endblock %}
+{% block content %}
+<p class="breadcrumb"><a href="/">Tournaments</a> / {{ tournament.name }}</p>
+<h1>{{ tournament.name }}</h1>
+
+<form method="post" action="{{ url_for('match_new', tid=tournament.id) }}" class="inline-form">
+    <input type="text" name="opponent" placeholder="Opponent name" required>
+    <button type="submit">Add match</button>
+</form>
+
+{% if matches|length > 0 %}
+<p style="margin-top:1.5rem;">
+    <a href="{{ url_for('tournament_blended', tid=tournament.id) }}">View all matches blended</a>
+</p>
+{% endif %}
+
+{% if matches %}
+<table>
+    <thead>
+        <tr>
+            <th>Opponent</th>
+            <th>Points</th>
+            <th>Passes</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for m in matches %}
+        <tr>
+            <td><a href="{{ url_for('match', mid=m.id) }}">vs {{ m.opponent }}</a></td>
+            <td>{{ m.point_count }}</td>
+            <td>{{ m.pass_count }}</td>
+            <td>
+                <form method="post" action="{{ url_for('match_delete', mid=m.id) }}" class="inline"
+                      onsubmit="return confirm('Delete this match?')">
+                    <button type="submit" class="btn-delete">delete</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="empty">No matches yet.</p>
+{% endif %}
+{% endblock %}
