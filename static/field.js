@@ -415,10 +415,6 @@
                     points.push(newPt);
                     blendingPoints = false;
                     activePointId = newPt.id;
-                    // Auto-flip offense direction
-                    offenseDir = offenseDir === "right" ? "left" : "right";
-                    updateDirLabel();
-                    drawDirectionArrow();
                     renderPointTabs();
                     renderPasses();
                 });
