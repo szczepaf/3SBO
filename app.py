@@ -189,6 +189,17 @@ def pass_delete(pid):
     return jsonify({"ok": True})
 
 
+@app.route("/api/pass/<int:pid>/coords", methods=["PUT"])
+def pass_update_coords(pid):
+    data = request.get_json()
+    db = get_db()
+    db.execute("UPDATE pass SET x1=?, y1=?, x2=?, y2=? WHERE id=?",
+               (data["x1"], data["y1"], data["x2"], data["y2"], pid))
+    db.commit()
+    db.close()
+    return jsonify({"ok": True})
+
+
 @app.route("/api/pass/<int:pid>/comment", methods=["PUT"])
 def pass_update_comment(pid):
     data = request.get_json()

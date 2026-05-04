@@ -11,8 +11,9 @@
 
     let offenseDir = "right";
     let showArrows = true;
-    let drawState = null; // null | { x1, y1 }
+    let drawState = null; // null | { x1, y1 } — only used for first pass in a point
     let selectedPassId = null;
+    let dragging = null; // null | { passObj, end: "origin"|"dest" }
 
     // Point-based state (match view only)
     let points = [];          // [{ id, seq, passes: [...] }, ...]
@@ -176,17 +177,36 @@
                 stroke: color, "stroke-width": 2
             }));
 
-            // Hit area
-            g.appendChild(doc("circle", {
-                cx: p.x1, cy: p.y1, r: 14,
-                fill: "transparent", stroke: "none", class: "hit-area",
-                style: "cursor:pointer"
-            }));
+            // Drag handle: origin
+            const originHandle = doc("circle", {
+                cx: p.x1, cy: p.y1, r: 12,
+                fill: "transparent", stroke: "none", class: "drag-handle",
+                style: "cursor:grab"
+            });
+            g.appendChild(originHandle);
+
+            // Drag handle: destination
+            const destHandle = doc("circle", {
+                cx: p.x2, cy: p.y2, r: 12,
+                fill: "transparent", stroke: "none", class: "drag-handle",
+                style: "cursor:grab"
+            });
+            g.appendChild(destHandle);
 
             if (!isBlended && !blendingPoints) {
+                originHandle.addEventListener("mousedown", function (e) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    dragging = { passObj: p, end: "origin" };
+                });
+                destHandle.addEventListener("mousedown", function (e) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    dragging = { passObj: p, end: "dest" };
+                });
                 g.addEventListener("click", function (e) {
                     e.stopPropagation();
-                    selectPass(p);
+                    if (!dragging) selectPass(p);
                 });
             }
 
@@ -239,17 +259,77 @@
         return { x: Math.round(loc.x * 10) / 10, y: Math.round(loc.y * 10) / 10 };
     }
 
+    // ---- Drag to reposition endpoints ----
+
+    if (!isBlended) {
+        svg.addEventListener("mousemove", function (e) {
+            if (!dragging) return;
+            const pt = svgPoint(e);
+            const p = dragging.passObj;
+            if (dragging.end === "origin") {
+                p.x1 = pt.x; p.y1 = pt.y;
+            } else {
+                p.x2 = pt.x; p.y2 = pt.y;
+            }
+            renderPasses();
+        });
+
+        svg.addEventListener("mouseup", function () {
+            if (!dragging) return;
+            const p = dragging.passObj;
+            dragging = null;
+            // Persist new coordinates
+            fetch(`/api/pass/${p.id}/coords`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ x1: p.x1, y1: p.y1, x2: p.x2, y2: p.y2 })
+            });
+        });
+
+        svg.addEventListener("mouseleave", function () {
+            if (!dragging) return;
+            const p = dragging.passObj;
+            dragging = null;
+            fetch(`/api/pass/${p.id}/coords`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ x1: p.x1, y1: p.y1, x2: p.x2, y2: p.y2 })
+            });
+        });
+    }
+
     // ---- Click to add pass ----
+
+    function lastPassOfActivePoint() {
+        const ptObj = points.find(p => p.id === activePointId);
+        if (!ptObj || ptObj.passes.length === 0) return null;
+        return ptObj.passes[ptObj.passes.length - 1];
+    }
 
     if (!isBlended) {
         svg.addEventListener("click", function (e) {
+            if (e.target.closest(".drag-handle")) return;
             if (e.target.closest(".pass-group")) return;
             if (blendingPoints) return;
             if (!activePointId) return;
 
             const pt = svgPoint(e);
+            const lastPass = lastPassOfActivePoint();
 
-            if (!drawState) {
+            if (lastPass) {
+                // Chain from previous pass destination
+                const isTurnover = document.getElementById("toggle-turnover").checked;
+                const data = {
+                    point_id: activePointId,
+                    x1: lastPass.x2, y1: lastPass.y2,
+                    x2: pt.x, y2: pt.y,
+                    direction: offenseDir,
+                    is_turnover: isTurnover ? 1 : 0,
+                    comment: ""
+                };
+                addPass(data);
+            } else if (!drawState) {
+                // First pass: need origin
                 drawState = { x1: pt.x, y1: pt.y };
                 const cs = 5;
                 const tmp = doc("g", { id: "tmp-origin" });
@@ -263,6 +343,7 @@
                 }));
                 svg.appendChild(tmp);
             } else {
+                // First pass: set destination
                 const isTurnover = document.getElementById("toggle-turnover").checked;
                 const data = {
                     point_id: activePointId,
@@ -275,23 +356,26 @@
                 drawState = null;
                 const tmp = document.getElementById("tmp-origin");
                 if (tmp) tmp.remove();
-
-                fetch("/api/pass", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(data)
-                })
-                    .then(r => r.json())
-                    .then(res => {
-                        data.id = res.id;
-                        data.seq = res.seq;
-                        const ptObj = points.find(p => p.id === activePointId);
-                        if (ptObj) ptObj.passes.push(data);
-                        renderPasses();
-                        document.getElementById("toggle-turnover").checked = false;
-                    });
+                addPass(data);
             }
         });
+    }
+
+    function addPass(data) {
+        fetch("/api/pass", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data)
+        })
+            .then(r => r.json())
+            .then(res => {
+                data.id = res.id;
+                data.seq = res.seq;
+                const ptObj = points.find(p => p.id === activePointId);
+                if (ptObj) ptObj.passes.push(data);
+                renderPasses();
+                document.getElementById("toggle-turnover").checked = false;
+            });
     }
 
     // ---- Controls ----
