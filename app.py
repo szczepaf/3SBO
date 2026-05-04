@@ -99,6 +99,7 @@ def match(mid):
         points_data.append({
             "id": pt["id"],
             "seq": pt["seq"],
+            "offense_dir": pt["offense_dir"],
             "passes": [dict(p) for p in passes]
         })
     db.close()
@@ -129,18 +130,6 @@ def tournament_blended(tid):
                            passes=[dict(p) for p in passes], matches=matches)
 
 
-# --- Match API ---
-
-@app.route("/api/match/<int:mid>/direction", methods=["PUT"])
-def match_update_direction(mid):
-    data = request.get_json()
-    db = get_db()
-    db.execute("UPDATE match SET offense_dir = ? WHERE id = ?", (data["direction"], mid))
-    db.commit()
-    db.close()
-    return jsonify({"ok": True})
-
-
 # --- Point API ---
 
 @app.route("/api/point", methods=["POST"])
@@ -156,6 +145,16 @@ def point_add():
     point_id = cur.lastrowid
     db.close()
     return jsonify({"id": point_id, "seq": seq})
+
+
+@app.route("/api/point/<int:pid>/direction", methods=["PUT"])
+def point_update_direction(pid):
+    data = request.get_json()
+    db = get_db()
+    db.execute("UPDATE point SET offense_dir = ? WHERE id = ?", (data["direction"], pid))
+    db.commit()
+    db.close()
+    return jsonify({"ok": True})
 
 
 @app.route("/api/point/<int:pid>", methods=["DELETE"])

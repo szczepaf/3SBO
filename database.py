@@ -23,7 +23,6 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             tournament_id INTEGER NOT NULL,
             opponent TEXT NOT NULL,
-            offense_dir TEXT NOT NULL DEFAULT 'right',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (tournament_id) REFERENCES tournament(id) ON DELETE CASCADE
         );
@@ -31,6 +30,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             match_id INTEGER NOT NULL,
             seq INTEGER NOT NULL,
+            offense_dir TEXT NOT NULL DEFAULT 'right',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (match_id) REFERENCES match(id) ON DELETE CASCADE
         );

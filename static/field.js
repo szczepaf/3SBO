@@ -9,7 +9,7 @@
     const svg = document.getElementById("field");
     const isBlended = typeof BLENDED !== "undefined" && BLENDED;
 
-    let offenseDir = (typeof INITIAL_DIRECTION !== "undefined") ? INITIAL_DIRECTION : "right";
+    let offenseDir = "right";
     let showArrows = true;
     let drawState = null; // null | { x1, y1 } — only used for first pass in a point
     let selectedPassId = null;
@@ -24,7 +24,15 @@
         points = INITIAL_POINTS.slice();
         if (points.length > 0) {
             activePointId = points[0].id;
+            offenseDir = points[0].offense_dir || "right";
         }
+    }
+
+    function syncDirFromActivePoint() {
+        const pt = points.find(p => p.id === activePointId);
+        if (pt) offenseDir = pt.offense_dir || "right";
+        updateDirLabel();
+        drawDirectionArrow();
     }
 
     // For blended tournament view, passes come in flat
@@ -257,6 +265,7 @@
             tab.addEventListener("click", function () {
                 blendingPoints = false;
                 activePointId = pt.id;
+                syncDirFromActivePoint();
                 renderPointTabs();
                 renderPasses();
             });
@@ -427,8 +436,11 @@
             offenseDir = offenseDir === "right" ? "left" : "right";
             updateDirLabel();
             drawDirectionArrow();
-            if (MATCH_ID) {
-                fetch(`/api/match/${MATCH_ID}/direction`, {
+            renderPasses();
+            if (activePointId) {
+                const pt = points.find(p => p.id === activePointId);
+                if (pt) pt.offense_dir = offenseDir;
+                fetch(`/api/point/${activePointId}/direction`, {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ direction: offenseDir })
