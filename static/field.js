@@ -134,36 +134,18 @@
 
     function renderPasses() {
         svg.querySelectorAll(".pass-group").forEach(el => el.remove());
+        const topLayer = doc("g", { class: "pass-group", "data-id": "top" });
 
         currentPasses().forEach(p => {
             const g = doc("g", { class: "pass-group", "data-id": p.id });
             const color = passColor(p);
 
+            // Line and origin cross in base layer
             if (showArrows) {
                 g.appendChild(doc("line", {
                     x1: p.x1, y1: p.y1, x2: p.x2, y2: p.y2,
                     stroke: color, "stroke-width": 1.5, "stroke-opacity": 0.7
                 }));
-
-                if (isScore(p)) {
-                    // Score: circle at destination
-                    g.appendChild(doc("circle", {
-                        cx: p.x2, cy: p.y2, r: 6,
-                        fill: "none", stroke: color, "stroke-width": 2, "stroke-opacity": 0.85
-                    }));
-                } else {
-                    // Normal: arrowhead at destination
-                    const angle = Math.atan2(p.y2 - p.y1, p.x2 - p.x1);
-                    const hs = 8;
-                    const ax1 = p.x2 - hs * Math.cos(angle - Math.PI / 6);
-                    const ay1 = p.y2 - hs * Math.sin(angle - Math.PI / 6);
-                    const ax2 = p.x2 - hs * Math.cos(angle + Math.PI / 6);
-                    const ay2 = p.y2 - hs * Math.sin(angle + Math.PI / 6);
-                    g.appendChild(doc("polygon", {
-                        points: `${p.x2},${p.y2} ${ax1},${ay1} ${ax2},${ay2}`,
-                        fill: color, "fill-opacity": 0.7
-                    }));
-                }
             }
 
             // Origin cross
@@ -177,21 +159,43 @@
                 stroke: color, "stroke-width": 2
             }));
 
-            // Drag handle: origin
+            svg.appendChild(g);
+
+            // Arrowheads/circles in top layer (always in front of x marks)
+            if (showArrows) {
+                if (isScore(p)) {
+                    topLayer.appendChild(doc("circle", {
+                        cx: p.x2, cy: p.y2, r: 8,
+                        fill: "none", stroke: color, "stroke-width": 2.5
+                    }));
+                } else {
+                    const angle = Math.atan2(p.y2 - p.y1, p.x2 - p.x1);
+                    const hs = 13;
+                    const ax1 = p.x2 - hs * Math.cos(angle - Math.PI / 6);
+                    const ay1 = p.y2 - hs * Math.sin(angle - Math.PI / 6);
+                    const ax2 = p.x2 - hs * Math.cos(angle + Math.PI / 6);
+                    const ay2 = p.y2 - hs * Math.sin(angle + Math.PI / 6);
+                    topLayer.appendChild(doc("polygon", {
+                        points: `${p.x2},${p.y2} ${ax1},${ay1} ${ax2},${ay2}`,
+                        fill: color, "fill-opacity": 0.85
+                    }));
+                }
+            }
+
+            // Drag handles in top layer too
             const originHandle = doc("circle", {
                 cx: p.x1, cy: p.y1, r: 12,
                 fill: "transparent", stroke: "none", class: "drag-handle",
                 style: "cursor:grab"
             });
-            g.appendChild(originHandle);
+            topLayer.appendChild(originHandle);
 
-            // Drag handle: destination
             const destHandle = doc("circle", {
                 cx: p.x2, cy: p.y2, r: 12,
                 fill: "transparent", stroke: "none", class: "drag-handle",
                 style: "cursor:grab"
             });
-            g.appendChild(destHandle);
+            topLayer.appendChild(destHandle);
 
             if (!isBlended && !blendingPoints) {
                 originHandle.addEventListener("mousedown", function (e) {
@@ -204,14 +208,18 @@
                     e.preventDefault();
                     dragging = { passObj: p, end: "dest" };
                 });
-                g.addEventListener("click", function (e) {
+                originHandle.addEventListener("click", function (e) {
+                    e.stopPropagation();
+                    if (!dragging) selectPass(p);
+                });
+                destHandle.addEventListener("click", function (e) {
                     e.stopPropagation();
                     if (!dragging) selectPass(p);
                 });
             }
-
-            svg.appendChild(g);
         });
+
+        svg.appendChild(topLayer);
     }
 
     // ---- Point tabs ----
