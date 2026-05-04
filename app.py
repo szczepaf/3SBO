@@ -128,6 +128,18 @@ def tournament_blended(tid):
                            passes=[dict(p) for p in passes], matches=matches)
 
 
+# --- Match API ---
+
+@app.route("/api/match/<int:mid>/direction", methods=["PUT"])
+def match_update_direction(mid):
+    data = request.get_json()
+    db = get_db()
+    db.execute("UPDATE match SET offense_dir = ? WHERE id = ?", (data["direction"], mid))
+    db.commit()
+    db.close()
+    return jsonify({"ok": True})
+
+
 # --- Point API ---
 
 @app.route("/api/point", methods=["POST"])

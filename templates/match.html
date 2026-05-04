@@ -41,6 +41,7 @@
 <script>
     const MATCH_ID = {{ match.id }};
     const INITIAL_POINTS = {{ points|tojson }};
+    const INITIAL_DIRECTION = "{{ match.offense_dir }}";
 </script>
 <script src="{{ url_for('static', filename='field.js') }}"></script>
 {% endblock %}

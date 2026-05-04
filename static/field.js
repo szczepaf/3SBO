@@ -9,7 +9,7 @@
     const svg = document.getElementById("field");
     const isBlended = typeof BLENDED !== "undefined" && BLENDED;
 
-    let offenseDir = "right";
+    let offenseDir = (typeof INITIAL_DIRECTION !== "undefined") ? INITIAL_DIRECTION : "right";
     let showArrows = true;
     let drawState = null; // null | { x1, y1 } — only used for first pass in a point
     let selectedPassId = null;
@@ -427,6 +427,13 @@
             offenseDir = offenseDir === "right" ? "left" : "right";
             updateDirLabel();
             drawDirectionArrow();
+            if (MATCH_ID) {
+                fetch(`/api/match/${MATCH_ID}/direction`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ direction: offenseDir })
+                });
+            }
         });
     }
 
@@ -581,6 +588,7 @@ ${svgData}
 
     drawField();
     if (!isBlended) {
+        updateDirLabel();
         drawDirectionArrow();
         renderPointTabs();
     }
