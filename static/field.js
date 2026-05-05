@@ -155,10 +155,15 @@
 
             // Line and origin cross in base layer
             if (showArrows) {
-                g.appendChild(doc("line", {
+                const isBackward = p.direction === "right" ? p.x2 < p.x1 : p.x2 > p.x1;
+                const lineAttrs = {
                     x1: p.x1, y1: p.y1, x2: p.x2, y2: p.y2,
                     stroke: color, "stroke-width": 1.5, "stroke-opacity": 0.7
-                }));
+                };
+                if (p.is_turnover && isBackward) {
+                    lineAttrs["stroke-dasharray"] = "6 4";
+                }
+                g.appendChild(doc("line", lineAttrs));
             }
 
             // Origin cross
@@ -506,6 +511,12 @@
         btnBlend.addEventListener("click", function () {
             blendingPoints = !blendingPoints;
             btnBlend.textContent = blendingPoints ? "single point" : "blend all";
+            const dirGroup = document.getElementById("dir-arrow-group");
+            if (blendingPoints) {
+                if (dirGroup) dirGroup.setAttribute("visibility", "hidden");
+            } else {
+                if (dirGroup) dirGroup.setAttribute("visibility", "visible");
+            }
             renderPointTabs();
             renderPasses();
         });
