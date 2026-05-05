@@ -105,3 +105,13 @@ th, td { text-align: left; padding: 0.2rem 1rem 0.2rem 0; font-weight: inherit; 
 .point-tab:hover { color: #999; opacity: 1; }
 
 .point-tab.active { opacity: 1; }
+
+.legend {
+    margin-top: 2rem;
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.legend svg { vertical-align: middle; }

@@ -18,6 +18,14 @@
 <div class="field-wrap">
     <svg id="field" viewBox="0 0 1000 467" xmlns="http://www.w3.org/2000/svg"></svg>
 </div>
+
+<div class="legend">
+    <svg width="20" height="10"><line x1="0" y1="5" x2="20" y2="5" stroke="#2e7d32" stroke-width="1.5"/></svg> forward
+    <svg width="20" height="10"><line x1="0" y1="5" x2="20" y2="5" stroke="#1565c0" stroke-width="1.5"/></svg> backward
+    <svg width="20" height="10"><line x1="0" y1="5" x2="20" y2="5" stroke="#c62828" stroke-width="1.5"/></svg> turnover
+    <svg width="20" height="10"><line x1="0" y1="5" x2="20" y2="5" stroke="#c62828" stroke-width="1.5" stroke-dasharray="4 3"/></svg> turnover (backward)
+    <svg width="16" height="12"><circle cx="8" cy="6" r="5" fill="none" stroke="#2e7d32" stroke-width="2"/></svg> score
+</div>
 {% endblock %}
 
 {% block scripts %}
