@@ -11,6 +11,7 @@
 
     let offenseDir = "right";
     let showArrows = true;
+    let turnoversOnly = false;
     let drawState = null; // null | { x1, y1 } — only used for first pass in a point
     let selectedPassId = null;
     let dragging = null; // null | { passObj, end: "origin"|"dest" }
@@ -128,14 +129,18 @@
     // ---- Get current passes to render ----
 
     function currentPasses() {
-        if (isBlended) return blendedPasses;
-        if (blendingPoints) {
-            let all = [];
-            points.forEach(pt => { all = all.concat(pt.passes); });
-            return all;
+        let passes;
+        if (isBlended) {
+            passes = blendedPasses;
+        } else if (blendingPoints) {
+            passes = [];
+            points.forEach(pt => { passes = passes.concat(pt.passes); });
+        } else {
+            const pt = points.find(p => p.id === activePointId);
+            passes = pt ? pt.passes : [];
         }
-        const pt = points.find(p => p.id === activePointId);
-        return pt ? pt.passes : [];
+        if (turnoversOnly) return passes.filter(p => p.is_turnover);
+        return passes;
     }
 
     // ---- Render passes ----
@@ -190,8 +195,8 @@
                 }
             }
 
-            // Turnover midpoint dot
-            if (p.is_turnover) {
+            // Turnover midpoint dot (only when arrows shown)
+            if (p.is_turnover && showArrows) {
                 const mx = (p.x1 + p.x2) / 2;
                 const my = (p.y1 + p.y2) / 2;
                 topLayer.appendChild(doc("circle", {
@@ -265,6 +270,7 @@
             tab.addEventListener("click", function () {
                 blendingPoints = false;
                 activePointId = pt.id;
+                closeComment();
                 syncDirFromActivePoint();
                 renderPointTabs();
                 renderPasses();
@@ -423,6 +429,14 @@
     if (toggleArrows) {
         toggleArrows.addEventListener("change", function () {
             showArrows = this.checked;
+            renderPasses();
+        });
+    }
+
+    const toggleTurnovers = document.getElementById("toggle-turnovers-only");
+    if (toggleTurnovers) {
+        toggleTurnovers.addEventListener("change", function () {
+            turnoversOnly = this.checked;
             renderPasses();
         });
     }
