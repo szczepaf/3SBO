@@ -12,6 +12,7 @@
     let offenseDir = "right";
     let showArrows = true;
     let turnoversOnly = false;
+    let unifyDir = false;
     let drawState = null; // null | { x1, y1 } — only used for first pass in a point
     let selectedPassId = null;
     let dragging = null; // null | { passObj, end: "origin"|"dest" }
@@ -130,16 +131,33 @@
 
     function currentPasses() {
         let passes;
+        let inBlendView = false;
         if (isBlended) {
             passes = blendedPasses;
+            inBlendView = true;
         } else if (blendingPoints) {
             passes = [];
             points.forEach(pt => { passes = passes.concat(pt.passes); });
+            inBlendView = true;
         } else {
             const pt = points.find(p => p.id === activePointId);
             passes = pt ? pt.passes : [];
         }
-        if (turnoversOnly) return passes.filter(p => p.is_turnover);
+        if (turnoversOnly) passes = passes.filter(p => p.is_turnover);
+        if (inBlendView && unifyDir) {
+            // Mirror left-direction passes so all read left-to-right.
+            // Returns shallow copies — does NOT mutate underlying data.
+            passes = passes.map(p => {
+                if (p.direction === "left") {
+                    return Object.assign({}, p, {
+                        x1: FIELD_W - p.x1,
+                        x2: FIELD_W - p.x2,
+                        direction: "right"
+                    });
+                }
+                return p;
+            });
+        }
         return passes;
     }
 
@@ -442,6 +460,14 @@
     if (toggleTurnovers) {
         toggleTurnovers.addEventListener("change", function () {
             turnoversOnly = this.checked;
+            renderPasses();
+        });
+    }
+
+    const toggleUnify = document.getElementById("toggle-unify");
+    if (toggleUnify) {
+        toggleUnify.addEventListener("change", function () {
+            unifyDir = this.checked;
             renderPasses();
         });
     }
