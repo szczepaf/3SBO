@@ -1,5 +1,5 @@
 ---
-title: "3SB - Turnover & Possession Report"
+title: "3SB - Offense Report"
 format:
   html:
     theme: cosmo
@@ -53,10 +53,14 @@ INFIELD_W = FIELD_W - 2 * EZ_DEPTH
 HUCK_THRESHOLD = 0.5 * INFIELD_W
 
 def normalize(d):
+    # 180° rotation for left-attacking points so all passes are viewed
+    # from the offense's perspective (attack to the right).
     d = d.copy()
     mask = d["pass_direction"] == "left"
     d.loc[mask, "x1"] = FIELD_W - d.loc[mask, "x1"]
     d.loc[mask, "x2"] = FIELD_W - d.loc[mask, "x2"]
+    d.loc[mask, "y1"] = FIELD_H - d.loc[mask, "y1"]
+    d.loc[mask, "y2"] = FIELD_H - d.loc[mask, "y2"]
     d.loc[mask, "pass_direction"] = "right"
     return d
 
@@ -121,9 +125,29 @@ result_palette = {
 }
 ```
 
-# Match-level statistics
+```{python}
+#| label: field-helper
+def draw_field(ax):
+    ax.set_xlim(0, FIELD_W)
+    ax.set_ylim(FIELD_H, 0)
+    ax.set_aspect("equal")
+    ax.set_facecolor("white")
+    ax.add_patch(plt.Rectangle((0, 0), FIELD_W, FIELD_H, fill=False, edgecolor="#1a1a1a", linewidth=1.2))
+    ax.axvline(EZ_DEPTH, color="#1a1a1a", linewidth=0.8)
+    ax.axvline(FIELD_W - EZ_DEPTH, color="#1a1a1a", linewidth=0.8)
+    ax.annotate("", xy=(FIELD_W/2 + 35, -12), xytext=(FIELD_W/2 - 35, -12),
+                arrowprops=dict(arrowstyle="->", color="#888"),
+                annotation_clip=False)
+    ax.text(FIELD_W/2, -28, "offense", ha="center", fontsize=9, color="#888")
+    ax.grid(False)
+    ax.set_xticks([]); ax.set_yticks([])
+    for s in ax.spines.values(): s.set_visible(False)
+```
 
-## Points played
+# Match-level statistics
+All of the statistics are only for the O1 line, not O2 or other rotations.
+
+## Points played per match
 
 ```{python}
 #| fig-width: 7
@@ -135,7 +159,50 @@ ax.yaxis.set_major_locator(plt.matplotlib.ticker.MaxNLocator(integer=True))
 plt.tight_layout(); plt.show()
 ```
 
+## Turnovers per match
+
+```{python}
+#| fig-width: 7
+#| fig-height: 3
+fig, ax = plt.subplots(figsize=(7, 3))
+sns.barplot(data=matches, x="match_opponent", y="total_turnovers", order=order,
+            hue="match_opponent", palette=result_palette, legend=False, ax=ax)
+ax.set(xlabel="", ylabel="turnovers", title="Turnovers per match")
+ax.yaxis.set_major_locator(plt.matplotlib.ticker.MaxNLocator(integer=True))
+for i, opp in enumerate(order):
+    v = matches.loc[matches["match_opponent"] == opp, "total_turnovers"].iloc[0]
+    ax.text(i, v + 0.1, f"{int(v)}", ha="center", fontsize=9)
+plt.tight_layout(); plt.show()
+```
+
+## Pass completion rate per match
+
+```{python}
+#| fig-width: 7
+#| fig-height: 3
+completion = df.groupby("match_opponent", as_index=False).agg(
+    passes=("pass_id", "count"),
+    turnovers=("is_turnover", "sum"),
+)
+completion["completion_rate"] = 1 - completion["turnovers"] / completion["passes"]
+completion = pd.DataFrame({"match_opponent": order}).merge(completion, on="match_opponent", how="left")
+
+fig, ax = plt.subplots(figsize=(7, 3))
+sns.barplot(data=completion, x="match_opponent", y="completion_rate", order=order,
+            hue="match_opponent", palette=result_palette, legend=False, ax=ax)
+ax.set(xlabel="", ylabel="completion rate", title="Pass completion rate per match")
+ax.yaxis.set_major_formatter(plt.matplotlib.ticker.PercentFormatter(1.0))
+ax.set_ylim(0, 1)
+for i, opp in enumerate(order):
+    row = completion.loc[completion["match_opponent"] == opp].iloc[0]
+    ax.text(i, row["completion_rate"] + 0.01,
+            f"{row['completion_rate']:.0%} ({int(row['passes'] - row['turnovers'])}/{int(row['passes'])})",
+            ha="center", fontsize=9)
+plt.tight_layout(); plt.show()
+```
+
 ## Scoring efficiency - points per possession
+Possession: a series of passes until a turnover.
 
 ```{python}
 #| fig-width: 7
@@ -153,7 +220,7 @@ plt.tight_layout(); plt.show()
 
 ## Passes per successful possession
 
-Average number of passes in a possession that ended in a score. A successful possession is the run of passes after the last turnover (or the whole point, if there were no turnovers) when we scored.
+Average number of passes in a possession that ended in a score.
 
 ```{python}
 #| fig-width: 7
@@ -187,8 +254,7 @@ plt.tight_layout(); plt.show()
 ```
 
 ## Break rate
-
-Share of points we did not score.
+Percentage of O points that ended in a break per match.  
 
 ```{python}
 #| fig-width: 7
@@ -206,7 +272,7 @@ plt.tight_layout(); plt.show()
 
 ## Clean holds
 
-Share of points where we scored without a single turnover.
+Percentage of points where we scored without a single turnover.
 
 ```{python}
 #| fig-width: 7
@@ -227,9 +293,9 @@ for i, opp in enumerate(order):
 plt.tight_layout(); plt.show()
 ```
 
-## Recovery - scoring after a turnover
+## Recovery rate
 
-Of points that included at least one turnover, how often did we still score?
+Percentage of points where there was at least one turnover and we scored (how much did we take the disc back).
 
 ```{python}
 #| fig-width: 7
@@ -254,13 +320,13 @@ for i, opp in enumerate(order):
 plt.tight_layout(); plt.show()
 ```
 
-# Pass-shape analysis
+# Pass analysis
 
-Passes below are normalized to a single offensive direction (left → right). A *huck* is a pass whose horizontal span covers at least 50% of the in-field (≥ 336 px). A *backward* pass moves opposite to the normalized attacking direction.
+Passes below are flipped to be in a single offensive direction (left to right). A *huck* is a pass that is at least as long as 50% of the in-field (the field minus the two endzones).
 
-## Score-attempt turnover rate
+## Red-zone turnover rate 
 
-Any pass whose destination lands inside the attacking endzone is treated as a score attempt. For each match: what share of those attempts ended in a turnover.
+Completion rate of attacking passes into the endzone.
 
 ```{python}
 #| fig-width: 7
@@ -288,6 +354,43 @@ plt.tight_layout(); plt.show()
 ```
 
 ## Hucks per game and their turnover rate
+Same-third hucks are hucks that originate and end in the same third of the field, only the two border thirds are considered. 
+
+```{python}
+#| fig-width: 7.2
+#| fig-height: 3.6
+_h = df[df["is_huck"]].copy()
+_completed = int((_h["is_turnover"] == 0).sum())
+_turned = int((_h["is_turnover"] == 1).sum())
+
+# Same-third hucks: y1 and y2 fall in the same horizontal third of the field.
+# Only the two sideline thirds count — the middle third is excluded.
+third_edges = np.linspace(0, FIELD_H, 4)
+_h["band1"] = np.digitize(_h["y1"], third_edges[1:-1])
+_h["band2"] = np.digitize(_h["y2"], third_edges[1:-1])
+_same = _h[(_h["band1"] == _h["band2"]) & (_h["band1"] != 1)]
+_s_completed = int((_same["is_turnover"] == 0).sum())
+_s_turned = int((_same["is_turnover"] == 1).sum())
+
+fig, axes = plt.subplots(1, 2, figsize=(7.2, 3.6))
+for ax, vals, title in [
+    (axes[0], (_completed, _turned), "Overall huck completion"),
+    (axes[1], (_s_completed, _s_turned),
+     f"Same-third hucks ({_s_completed + _s_turned}/{_completed + _turned})"),
+]:
+    c, t = vals
+    ax.pie(
+        [c, t],
+        labels=[f"completed\n{c}", f"turnover\n{t}"],
+        colors=["#2e7d32", "#c62828"],
+        autopct="%1.0f%%",
+        startangle=90,
+        wedgeprops=dict(edgecolor="white", linewidth=1.5),
+        textprops=dict(fontsize=10),
+    )
+    ax.set_title(title, fontsize=11, loc="left")
+plt.tight_layout(); plt.show()
+```
 
 ```{python}
 #| fig-width: 8
@@ -313,7 +416,78 @@ for i, opp in enumerate(order):
 plt.tight_layout(); plt.show()
 ```
 
-## Turnover rate by pass direction
+## Huck map - completed vs. turnover
+
+Again, passes are normalized so offense always attacks left to right. Completed vs turnover hucks.
+
+```{python}
+#| fig-width: 8
+#| fig-height: 8.4
+hucks_norm = df[df["is_huck"]].copy()
+completed_hucks = hucks_norm[hucks_norm["is_turnover"] == 0]
+turn_hucks = hucks_norm[hucks_norm["is_turnover"] == 1]
+
+fig, axes = plt.subplots(2, 1, figsize=(8, 8.4))
+
+for ax, sub, color, title in [
+    (axes[0], completed_hucks, "#2e7d32", "completed hucks"),
+    (axes[1], turn_hucks, "#c62828", "turnover hucks"),
+]:
+    draw_field(ax)
+    for _, row in sub.iterrows():
+        ax.annotate(
+            "",
+            xy=(row["x2"], row["y2"]), xytext=(row["x1"], row["y1"]),
+            arrowprops=dict(arrowstyle="->", color=color, alpha=0.75, lw=1.3),
+        )
+    ax.scatter(sub["x1"], sub["y1"], s=18, color=color, marker="x", linewidths=1.2)
+    ax.set_title(f"{title} (n={len(sub)})", fontsize=11, loc="left")
+
+plt.tight_layout(); plt.show()
+```
+
+## Huck completion rate by origin
+
+Field divided into a grid, cells show how often a huck thrown from that area was completed. Cells with no hucks are gray. Labels hold the `completed / total` ratio.
+
+```{python}
+#| fig-width: 8
+#| fig-height: 4.2
+nx, ny = 5, 3
+x_edges = np.linspace(0, FIELD_W, nx + 1)
+y_edges = np.linspace(0, FIELD_H, ny + 1)
+
+h_all, _, _ = np.histogram2d(hucks_norm["x1"], hucks_norm["y1"],
+                             bins=[x_edges, y_edges])
+completed_mask = hucks_norm["is_turnover"] == 0
+h_done, _, _ = np.histogram2d(hucks_norm.loc[completed_mask, "x1"],
+                              hucks_norm.loc[completed_mask, "y1"],
+                              bins=[x_edges, y_edges])
+with np.errstate(divide="ignore", invalid="ignore"):
+    rate = np.where(h_all > 0, h_done / h_all, np.nan)
+
+fig, ax = plt.subplots(figsize=(8, 4.2))
+draw_field(ax)
+cmap = plt.matplotlib.colormaps["RdYlGn"].copy()
+cmap.set_bad("#eeeeee")
+im = ax.imshow(rate.T, origin="upper", extent=[0, FIELD_W, FIELD_H, 0],
+               vmin=0, vmax=1, cmap=cmap, alpha=0.65, aspect="equal", zorder=0)
+for i in range(nx):
+    for j in range(ny):
+        n = int(h_all[i, j])
+        if n == 0:
+            continue
+        cx = (x_edges[i] + x_edges[i + 1]) / 2
+        cy = (y_edges[j] + y_edges[j + 1]) / 2
+        ax.text(cx, cy, f"{int(h_done[i, j])}/{n}",
+                ha="center", va="center", fontsize=10, color="#1a1a1a")
+cbar = fig.colorbar(im, ax=ax, fraction=0.04, pad=0.02)
+cbar.set_label("completion rate")
+cbar.ax.yaxis.set_major_formatter(plt.matplotlib.ticker.PercentFormatter(1.0))
+plt.tight_layout(); plt.show()
+```
+
+## Turnover rate by pass direction (forward vs backward)
 
 ```{python}
 #| fig-width: 5
@@ -340,7 +514,7 @@ plt.tight_layout(); plt.show()
 
 ## Turnover breakdown - mechanical, huck, other
 
-A turnover counts as *mechanical* when its comment contains "mechanic" (mechanický, mechanicky, …) and as *huck* when its horizontal span is at least 50 % of the in-field. No turnover currently falls into both buckets, so the categories are disjoint.
+We noted when a turnover was mechanical (= a poorly executed throw, "osobní chyba, zához"), not a decision-making or system error or a good defensive effort.   
 
 ```{python}
 #| fig-width: 5.5
@@ -369,7 +543,7 @@ plt.tight_layout(); plt.show()
 
 # Turnover heat-maps
 
-All maps below use turnover passes after normalization (offense → right). Darker = more.
+O is left to right again. Darker = more likely a turnover happens in that region. 
 
 ```{python}
 #| label: heatmap-helpers
@@ -409,7 +583,7 @@ ax.scatter(turns_df["x1"], turns_df["y1"], s=18, color="#1a1a1a", marker="x", li
 plt.tight_layout(); plt.show()
 ```
 
-## Destination - where turnovers *end up*
+## Destination - where passes that are turnovers *are thrown to*
 
 The intended (or actual) target location of every turnover pass.
 
@@ -429,7 +603,7 @@ ax.scatter(turns_df["x2"], turns_df["y2"], s=22, color="#1a1a1a", marker="o",
 plt.tight_layout(); plt.show()
 ```
 
-## Arrows - every turnover, normalized
+## Arrows - every turnover 
 
 Each turnover pass drawn as a red arrow from origin to destination, with the attacking direction unified to the right.
 
@@ -446,6 +620,72 @@ for _, row in turns_df.iterrows():
     )
 ax.scatter(turns_df["x1"], turns_df["y1"], s=16, color="#c62828",
            marker="x", linewidths=1.2)
+plt.tight_layout(); plt.show()
+```
+
+## Turnover origin by field quarter
+
+Field split into four horizontal quarters; each shaded by the share of turnovers whose origin are inside it.
+
+```{python}
+#| fig-width: 8
+#| fig-height: 4.2
+quarter_edges = np.linspace(0, FIELD_H, 5)
+counts, _ = np.histogram(turns_df["y1"], bins=quarter_edges)
+total = counts.sum()
+ratios = counts / total if total else counts.astype(float)
+
+fig, ax = plt.subplots(figsize=(8, 4.2))
+draw_field(ax)
+cmap = plt.matplotlib.colormaps["Reds"]
+vmin, vmax = ratios.min(), ratios.max()
+span = vmax - vmin
+for i in range(4):
+    y0, y1 = quarter_edges[i], quarter_edges[i + 1]
+    # Stretch [vmin, vmax] across [0.12, 0.95] for max contrast between strips.
+    t = (ratios[i] - vmin) / span if span else 0.5
+    color = cmap(0.12 + 0.83 * t)
+    ax.add_patch(plt.Rectangle((0, y0), FIELD_W, y1 - y0,
+                               color=color, alpha=0.85, zorder=0))
+    ax.text(FIELD_W / 2, (y0 + y1) / 2,
+            f"{ratios[i]:.0%}  ({counts[i]}/{total})",
+            ha="center", va="center", fontsize=11, color="#1a1a1a")
+plt.tight_layout(); plt.show()
+```
+
+## Pass completion rate by field quarter
+
+Field split into four horizontal quarters; each shaded by the completion rate of passes whose origin are inside it.
+
+```{python}
+#| fig-width: 8
+#| fig-height: 4.2
+quarter_edges = np.linspace(0, FIELD_H, 5)
+all_counts, _ = np.histogram(df["y1"], bins=quarter_edges)
+to_counts, _ = np.histogram(df.loc[df["is_turnover"] == 1, "y1"], bins=quarter_edges)
+completed = all_counts - to_counts
+with np.errstate(divide="ignore", invalid="ignore"):
+    comp_rate = np.where(all_counts > 0, completed / all_counts, np.nan)
+
+fig, ax = plt.subplots(figsize=(8, 4.2))
+draw_field(ax)
+cmap = plt.matplotlib.colormaps["Blues"]
+valid = comp_rate[~np.isnan(comp_rate)]
+vmin, vmax = (valid.min(), valid.max()) if len(valid) else (0, 1)
+span = vmax - vmin
+for i in range(4):
+    y0, y1 = quarter_edges[i], quarter_edges[i + 1]
+    if np.isnan(comp_rate[i]):
+        color = (0.93, 0.93, 0.93, 1.0)
+        label = "no data"
+    else:
+        t = (comp_rate[i] - vmin) / span if span else 0.5
+        color = cmap(0.12 + 0.83 * t)
+        label = f"{comp_rate[i]:.0%}  ({int(completed[i])}/{int(all_counts[i])})"
+    ax.add_patch(plt.Rectangle((0, y0), FIELD_W, y1 - y0,
+                               color=color, alpha=0.85, zorder=0))
+    ax.text(FIELD_W / 2, (y0 + y1) / 2, label,
+            ha="center", va="center", fontsize=11, color="#1a1a1a")
 plt.tight_layout(); plt.show()
 ```
 
@@ -469,22 +709,22 @@ fig, axes = plt.subplots(2, 1, figsize=(7, 5.2), sharex=True)
 # Completed
 sns.histplot(
     data=df[df["is_turnover"] == 0], x="abs_dx",
-    stat="density", kde=True, bins=40, alpha=0.5,
+    stat="count", kde=True, bins=40, alpha=0.5,
     color=completed_color, ax=axes[0],
 )
-axes[0].set(xlabel="horizontal span (px)", ylabel="", title="completed passes")
-axes[0].set_yticks([])
+axes[0].set(xlabel="horizontal span (px) - pass length", ylabel="count", title="completed passes")
+axes[0].yaxis.set_major_locator(plt.matplotlib.ticker.MaxNLocator(integer=True))
 axes[0].axvline(HUCK_THRESHOLD, linestyle="--", color="#888", linewidth=0.8)
 axes[0].text(HUCK_THRESHOLD + 5, axes[0].get_ylim()[1] * 0.85, "huck", color="#888", fontsize=9)
 
 # Turnovers
 sns.histplot(
     data=df[df["is_turnover"] == 1], x="abs_dx",
-    stat="density", kde=True, bins=40, alpha=0.5,
+    stat="count", kde=True, bins=40, alpha=0.5,
     color=turnover_color, ax=axes[1],
 )
-axes[1].set(xlabel="horizontal span (px)", ylabel="", title="turnovers")
-axes[1].set_yticks([])
+axes[1].set(xlabel="horizontal span (px) - pass length", ylabel="count", title="turnovers")
+axes[1].yaxis.set_major_locator(plt.matplotlib.ticker.MaxNLocator(integer=True))
 axes[1].axvline(HUCK_THRESHOLD, linestyle="--", color="#888", linewidth=0.8)
 axes[1].text(HUCK_THRESHOLD + 5, axes[1].get_ylim()[1] * 0.85, "huck", color="#888", fontsize=9)
 

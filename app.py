@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify, Response
+from flask import Flask, render_template, request, redirect, url_for, jsonify, Response, send_from_directory
 from database import get_db, init_db
 import csv
 import io
@@ -6,6 +6,13 @@ import io
 app = Flask(__name__)
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 init_db()
+
+
+# --- Report ---
+
+@app.route("/report")
+def report():
+    return send_from_directory("report", "report.html")
 
 
 # --- CSV export ---
