@@ -34,7 +34,7 @@
         const pt = points.find(p => p.id === activePointId);
         if (pt) offenseDir = pt.offense_dir || "right";
         updateDirLabel();
-        drawDirectionArrow();
+        updateDirArrow();
     }
 
     // For blended tournament view, passes come in flat
@@ -76,15 +76,16 @@
 
     // ---- Direction arrow ----
 
-    function drawDirectionArrow() {
+    function drawDirectionArrow(dirOverride) {
         const existing = document.getElementById("dir-arrow-group");
         if (existing) existing.remove();
 
+        const useDir = dirOverride || offenseDir;
         const g = doc("g", { id: "dir-arrow-group" });
         const cy = FIELD_H / 2;
         const arrowLen = 60;
         let ax, bx;
-        if (offenseDir === "right") {
+        if (useDir === "right") {
             ax = FIELD_W / 2 - arrowLen / 2;
             bx = FIELD_W / 2 + arrowLen / 2;
         } else {
@@ -96,7 +97,7 @@
             stroke: "#bbb", "stroke-width": 1.2
         }));
         const headSize = 7;
-        const dir = offenseDir === "right" ? 1 : -1;
+        const dir = useDir === "right" ? 1 : -1;
         g.appendChild(doc("line", {
             x1: bx, y1: cy - 30, x2: bx - dir * headSize, y2: cy - 30 - headSize,
             stroke: "#bbb", "stroke-width": 1.2
@@ -111,6 +112,24 @@
             "font-family": "Georgia, serif"
         }, "offense"));
         svg.appendChild(g);
+    }
+
+    function updateDirArrow() {
+        const existing = document.getElementById("dir-arrow-group");
+        if (existing) existing.remove();
+
+        if (isBlended) {
+            // Tournament blended view: only show when unifying
+            if (unifyDir) drawDirectionArrow("right");
+            return;
+        }
+        if (blendingPoints) {
+            // Match-level blend: only show when unifying
+            if (unifyDir) drawDirectionArrow("right");
+            return;
+        }
+        // Single-point view: always show with the point's offense direction
+        drawDirectionArrow();
     }
 
     // ---- Pass color logic ----
@@ -468,6 +487,7 @@
     if (toggleUnify) {
         toggleUnify.addEventListener("change", function () {
             unifyDir = this.checked;
+            updateDirArrow();
             renderPasses();
         });
     }
@@ -480,7 +500,7 @@
         btnDir.addEventListener("click", function () {
             offenseDir = offenseDir === "right" ? "left" : "right";
             updateDirLabel();
-            drawDirectionArrow();
+            updateDirArrow();
             renderPasses();
             if (activePointId) {
                 const pt = points.find(p => p.id === activePointId);
@@ -537,12 +557,7 @@
         btnBlend.addEventListener("click", function () {
             blendingPoints = !blendingPoints;
             btnBlend.textContent = blendingPoints ? "single point" : "blend all";
-            const dirGroup = document.getElementById("dir-arrow-group");
-            if (blendingPoints) {
-                if (dirGroup) dirGroup.setAttribute("visibility", "hidden");
-            } else {
-                if (dirGroup) dirGroup.setAttribute("visibility", "visible");
-            }
+            updateDirArrow();
             renderPointTabs();
             renderPasses();
         });
@@ -652,8 +667,8 @@ ${svgData}
     drawField();
     if (!isBlended) {
         updateDirLabel();
-        drawDirectionArrow();
         renderPointTabs();
     }
+    updateDirArrow();
     renderPasses();
 })();
