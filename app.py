@@ -1,9 +1,48 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask import Flask, render_template, request, redirect, url_for, jsonify, Response
 from database import get_db, init_db
+import csv
+import io
 
 app = Flask(__name__)
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 init_db()
+
+
+# --- CSV export ---
+
+@app.route("/export/passes.csv")
+def export_passes_csv():
+    db = get_db()
+    rows = db.execute(
+        "SELECT "
+        "t.id AS tournament_id, t.name AS tournament_name, "
+        "m.id AS match_id, m.opponent AS match_opponent, m.created_at AS match_created_at, "
+        "pt.id AS point_id, pt.seq AS point_seq, pt.offense_dir AS point_offense_dir, "
+        "p.id AS pass_id, p.seq AS pass_seq, "
+        "p.x1, p.y1, p.x2, p.y2, "
+        "p.direction AS pass_direction, p.is_turnover, p.comment, p.created_at AS pass_created_at "
+        "FROM pass p "
+        "JOIN point pt ON p.point_id = pt.id "
+        "JOIN match m ON pt.match_id = m.id "
+        "JOIN tournament t ON m.tournament_id = t.id "
+        "ORDER BY t.id, m.id, pt.seq, p.seq"
+    ).fetchall()
+    db.close()
+
+    buf = io.StringIO()
+    if rows:
+        writer = csv.DictWriter(buf, fieldnames=rows[0].keys())
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(dict(row))
+    else:
+        buf.write("no data\n")
+
+    return Response(
+        buf.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=3sb_passes.csv"}
+    )
 
 
 # --- Tournament routes ---

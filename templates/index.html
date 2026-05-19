@@ -29,4 +29,8 @@
 {% else %}
 <p class="empty">No tournaments yet.</p>
 {% endif %}
+
+<p style="margin-top: 1.5rem;">
+    <a href="{{ url_for('export_passes_csv') }}">export all passes as csv</a>
+</p>
 {% endblock %}
