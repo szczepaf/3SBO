@@ -1,0 +1,4 @@
+stats.db
+stats.db.bak
+__pycache__/
+*.pyc
