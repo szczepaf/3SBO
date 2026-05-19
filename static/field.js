@@ -218,8 +218,8 @@
                 }
             }
 
-            // Turnover midpoint dot (only when arrows shown)
-            if (p.is_turnover && showArrows) {
+            // Turnover midpoint dot (only when arrows shown, never when unifying)
+            if (p.is_turnover && showArrows && !unifyDir) {
                 const mx = (p.x1 + p.x2) / 2;
                 const my = (p.y1 + p.y2) / 2;
                 topLayer.appendChild(doc("circle", {
