@@ -1,0 +1,497 @@
+---
+title: "3SB - Turnover & Possession Report"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-depth: 2
+    css: styles.css
+    code-tools: false
+    fig-align: left
+    embed-resources: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{python}
+#| label: setup
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+from pathlib import Path
+
+# Seaborn native theme - keep grids and default palette
+sns.set_theme(
+    style="whitegrid",
+    palette="deep",
+    rc={
+        "font.family": "Georgia, serif",
+        "font.serif": ["Georgia"],
+        "axes.titlesize": 12,
+        "axes.titleweight": "normal",
+        "axes.titlelocation": "left",
+        "axes.labelsize": 10,
+        "axes.edgecolor": "#cccccc",
+        "grid.color": "#eeeeee",
+        "axes.spines.top": False,
+        "axes.spines.right": False,
+        "figure.dpi": 110,
+    },
+)
+
+CSV = Path("../3sb_passes.csv")
+df = pd.read_csv(CSV)
+
+FIELD_W = 1000
+FIELD_H = 467
+EZ_DEPTH = 164
+INFIELD_W = FIELD_W - 2 * EZ_DEPTH
+HUCK_THRESHOLD = 0.5 * INFIELD_W
+
+def normalize(d):
+    d = d.copy()
+    mask = d["pass_direction"] == "left"
+    d.loc[mask, "x1"] = FIELD_W - d.loc[mask, "x1"]
+    d.loc[mask, "x2"] = FIELD_W - d.loc[mask, "x2"]
+    d.loc[mask, "pass_direction"] = "right"
+    return d
+
+df = normalize(df)
+
+df["dx"] = df["x2"] - df["x1"]
+df["dy"] = df["y2"] - df["y1"]
+df["dist"] = np.sqrt(df["dx"] ** 2 + df["dy"] ** 2)
+df["is_forward"] = df["dx"] > 0
+df["is_huck"] = df["dx"].abs() >= HUCK_THRESHOLD
+df["is_score"] = (~df["is_turnover"].astype(bool)) & (df["x2"] > FIELD_W - EZ_DEPTH)
+df["comment_lower"] = df["comment"].fillna("").str.lower()
+df["is_mechanical"] = df["comment_lower"].str.contains("mechanic", regex=True)
+
+def point_summary(g):
+    g = g.sort_values("pass_seq")
+    n_to = int(g["is_turnover"].sum())
+    last_is_to = bool(g["is_turnover"].iloc[-1])
+    n_poss = n_to if last_is_to else n_to + 1
+    scored = bool(g["is_score"].any())
+    return pd.Series({
+        "match_opponent": g["match_opponent"].iloc[0],
+        "turnovers": n_to,
+        "possessions": n_poss,
+        "scored": scored,
+        "broken": not scored,
+        "had_turnover": n_to > 0,
+        "n_passes": len(g),
+    })
+
+points = df.groupby("point_id", as_index=False).apply(point_summary, include_groups=False)
+points = points.reset_index(drop=True)
+
+def match_summary(g):
+    return pd.Series({
+        "points": len(g),
+        "scored": int(g["scored"].sum()),
+        "broken": int(g["broken"].sum()),
+        "total_turnovers": int(g["turnovers"].sum()),
+        "total_possessions": int(g["possessions"].sum()),
+        "ppp": g["scored"].sum() / g["possessions"].sum() if g["possessions"].sum() else 0,
+        "tpp": g["turnovers"].mean(),
+        "break_rate": g["broken"].mean(),
+    })
+
+matches = points.groupby("match_opponent", as_index=False).apply(match_summary, include_groups=False)
+order = matches.sort_values("points", ascending=False)["match_opponent"].tolist()
+
+# Hard-coded results - inferred outcomes can be wrong because not every point is recorded.
+MATCH_RESULTS = {
+    "Mooncatchers": "loss",
+    "Grut": "loss",
+    "Iznogood": "loss",
+    "Thac": "win",
+    "Wall City": "win",
+}
+WIN_COLOR = "#2e7d32"
+LOSS_COLOR = "#c62828"
+result_palette = {
+    opp: (WIN_COLOR if MATCH_RESULTS.get(opp) == "win" else LOSS_COLOR)
+    for opp in order
+}
+```
+
+# Match-level statistics
+
+## Points played
+
+```{python}
+#| fig-width: 7
+#| fig-height: 3
+fig, ax = plt.subplots(figsize=(7, 3))
+sns.barplot(data=matches, x="match_opponent", y="points", order=order, ax=ax)
+ax.set(xlabel="", ylabel="points played", title="Points per match")
+ax.yaxis.set_major_locator(plt.matplotlib.ticker.MaxNLocator(integer=True))
+plt.tight_layout(); plt.show()
+```
+
+## Scoring efficiency - points per possession
+
+```{python}
+#| fig-width: 7
+#| fig-height: 3
+fig, ax = plt.subplots(figsize=(7, 3))
+sns.barplot(data=matches, x="match_opponent", y="ppp", order=order,
+            hue="match_opponent", palette=result_palette, legend=False, ax=ax)
+ax.set(xlabel="", ylabel="points / possession",
+       title="Conversion rate - how often a possession results in a score")
+for i, opp in enumerate(order):
+    v = matches.loc[matches["match_opponent"] == opp, "ppp"].iloc[0]
+    ax.text(i, v + 0.01, f"{v:.2f}", ha="center", fontsize=9)
+plt.tight_layout(); plt.show()
+```
+
+## Passes per successful possession
+
+Average number of passes in a possession that ended in a score. A successful possession is the run of passes after the last turnover (or the whole point, if there were no turnovers) when we scored.
+
+```{python}
+#| fig-width: 7
+#| fig-height: 3
+def successful_possession_passes(g):
+    g = g.sort_values("pass_seq")
+    if not g["is_score"].any():
+        return None
+    # last turnover index within the point, -1 if none
+    to_idx = g.index[g["is_turnover"] == 1]
+    start = (to_idx.max() + 1) if len(to_idx) else g.index.min()
+    return len(g.loc[start:])
+
+succ = df.groupby("point_id").apply(successful_possession_passes, include_groups=False)
+succ = succ.dropna().rename("passes").reset_index()
+succ = succ.merge(df[["point_id", "match_opponent"]].drop_duplicates(),
+                  on="point_id")
+agg = succ.groupby("match_opponent", as_index=False)["passes"].mean()
+
+fig, ax = plt.subplots(figsize=(7, 3))
+sns.barplot(data=agg, x="match_opponent", y="passes", order=order,
+            hue="match_opponent", palette=result_palette, legend=False, ax=ax)
+ax.set(xlabel="", ylabel="passes / successful possession",
+       title="Average passes in possessions that ended in a score")
+for i, opp in enumerate(order):
+    row = agg[agg["match_opponent"] == opp]
+    if len(row):
+        v = row["passes"].iloc[0]
+        ax.text(i, v + 0.1, f"{v:.1f}", ha="center", fontsize=9)
+plt.tight_layout(); plt.show()
+```
+
+## Break rate
+
+Share of points we did not score.
+
+```{python}
+#| fig-width: 7
+#| fig-height: 3
+fig, ax = plt.subplots(figsize=(7, 3))
+sns.barplot(data=matches, x="match_opponent", y="break_rate", order=order,
+            hue="match_opponent", palette=result_palette, legend=False, ax=ax)
+ax.set(xlabel="", ylabel="break rate", title="Break rate per match")
+ax.yaxis.set_major_formatter(plt.matplotlib.ticker.PercentFormatter(1.0))
+for i, opp in enumerate(order):
+    v = matches.loc[matches["match_opponent"] == opp, "break_rate"].iloc[0]
+    ax.text(i, v + 0.01, f"{v:.0%}", ha="center", fontsize=9)
+plt.tight_layout(); plt.show()
+```
+
+## Clean holds
+
+Share of points where we scored without a single turnover.
+
+```{python}
+#| fig-width: 7
+#| fig-height: 3
+points["clean_hold"] = points["scored"] & (points["turnovers"] == 0)
+clean = points.groupby("match_opponent", as_index=False)["clean_hold"].mean()
+clean = pd.DataFrame({"match_opponent": order}).merge(clean, on="match_opponent", how="left")
+
+fig, ax = plt.subplots(figsize=(7, 3))
+sns.barplot(data=clean, x="match_opponent", y="clean_hold", order=order,
+            hue="match_opponent", palette=result_palette, legend=False, ax=ax)
+ax.set(xlabel="", ylabel="clean hold rate",
+       title="Clean holds - points scored without a turnover")
+ax.yaxis.set_major_formatter(plt.matplotlib.ticker.PercentFormatter(1.0))
+for i, opp in enumerate(order):
+    v = clean.loc[clean["match_opponent"] == opp, "clean_hold"].iloc[0]
+    ax.text(i, v + 0.01, f"{v:.0%}", ha="center", fontsize=9)
+plt.tight_layout(); plt.show()
+```
+
+## Recovery - scoring after a turnover
+
+Of points that included at least one turnover, how often did we still score?
+
+```{python}
+#| fig-width: 7
+#| fig-height: 3
+to_pts = points[points["had_turnover"]].copy()
+recovery = to_pts.groupby("match_opponent", as_index=False).agg(
+    pts_with_to=("scored", "size"),
+    recovered=("scored", "sum"),
+)
+recovery["recovery_rate"] = recovery["recovered"] / recovery["pts_with_to"]
+recovery = pd.DataFrame({"match_opponent": order}).merge(recovery, on="match_opponent", how="left")
+fig, ax = plt.subplots(figsize=(7, 3))
+sns.barplot(data=recovery, x="match_opponent", y="recovery_rate", order=order,
+            hue="match_opponent", palette=result_palette, legend=False, ax=ax)
+ax.set(xlabel="", ylabel="recovery rate",
+       title="Score rate on points that contained a turnover")
+ax.yaxis.set_major_formatter(plt.matplotlib.ticker.PercentFormatter(1.0))
+for i, opp in enumerate(order):
+    v = recovery.loc[recovery["match_opponent"] == opp, "recovery_rate"].iloc[0]
+    if pd.notna(v):
+        ax.text(i, v + 0.01, f"{v:.0%}", ha="center", fontsize=9)
+plt.tight_layout(); plt.show()
+```
+
+# Pass-shape analysis
+
+Passes below are normalized to a single offensive direction (left → right). A *huck* is a pass whose horizontal span covers at least 50% of the in-field (≥ 336 px). A *backward* pass moves opposite to the normalized attacking direction.
+
+## Score-attempt turnover rate
+
+Any pass whose destination lands inside the attacking endzone is treated as a score attempt. For each match: what share of those attempts ended in a turnover.
+
+```{python}
+#| fig-width: 7
+#| fig-height: 3
+attempts = df[df["x2"] > FIELD_W - EZ_DEPTH].copy()
+attempt_stats = attempts.groupby("match_opponent", as_index=False).agg(
+    attempts=("pass_id", "count"),
+    failed=("is_turnover", "sum"),
+)
+attempt_stats["fail_rate"] = attempt_stats["failed"] / attempt_stats["attempts"]
+attempt_stats = pd.DataFrame({"match_opponent": order}).merge(attempt_stats, on="match_opponent", how="left").fillna(0)
+
+fig, ax = plt.subplots(figsize=(7, 3))
+sns.barplot(data=attempt_stats, x="match_opponent", y="fail_rate", order=order, ax=ax)
+ax.set(xlabel="", ylabel="turnover rate",
+       title="Turnover rate of passes into the endzone")
+ax.yaxis.set_major_formatter(plt.matplotlib.ticker.PercentFormatter(1.0))
+for i, opp in enumerate(order):
+    row = attempt_stats[attempt_stats["match_opponent"] == opp].iloc[0]
+    if row["attempts"] > 0:
+        ax.text(i, row["fail_rate"] + 0.01,
+                f"{row['fail_rate']:.0%} ({int(row['failed'])}/{int(row['attempts'])})",
+                ha="center", fontsize=9)
+plt.tight_layout(); plt.show()
+```
+
+## Hucks per game and their turnover rate
+
+```{python}
+#| fig-width: 8
+#| fig-height: 3.4
+hucks = df[df["is_huck"]]
+huck_stats = hucks.groupby("match_opponent", as_index=False).agg(
+    hucks=("pass_id", "count"),
+    huck_turnovers=("is_turnover", "sum"),
+)
+huck_stats["huck_to_rate"] = huck_stats["huck_turnovers"] / huck_stats["hucks"]
+huck_stats = pd.DataFrame({"match_opponent": order}).merge(huck_stats, on="match_opponent", how="left").fillna(0)
+
+fig, axes = plt.subplots(1, 2, figsize=(8, 3.4))
+sns.barplot(data=huck_stats, x="match_opponent", y="hucks", order=order, ax=axes[0])
+axes[0].set(xlabel="", ylabel="hucks", title="Hucks per match")
+
+sns.barplot(data=huck_stats, x="match_opponent", y="huck_to_rate", order=order, ax=axes[1])
+axes[1].set(xlabel="", ylabel="turnover rate", title="Huck turnover rate")
+axes[1].yaxis.set_major_formatter(plt.matplotlib.ticker.PercentFormatter(1.0))
+for i, opp in enumerate(order):
+    v = huck_stats.loc[huck_stats["match_opponent"] == opp, "huck_to_rate"].iloc[0]
+    axes[1].text(i, v + 0.01, f"{v:.0%}", ha="center", fontsize=9)
+plt.tight_layout(); plt.show()
+```
+
+## Turnover rate by pass direction
+
+```{python}
+#| fig-width: 5
+#| fig-height: 3
+df["direction_label"] = df["is_forward"].map({True: "forward", False: "backward"})
+dir_stats = df.groupby("direction_label", as_index=False).agg(
+    passes=("pass_id", "count"),
+    turnovers=("is_turnover", "sum"),
+)
+dir_stats["to_rate"] = dir_stats["turnovers"] / dir_stats["passes"]
+dir_stats = dir_stats.set_index("direction_label").reindex(["forward", "backward"]).reset_index()
+
+fig, ax = plt.subplots(figsize=(5, 3))
+sns.barplot(data=dir_stats, x="direction_label", y="to_rate", ax=ax)
+ax.set(xlabel="", ylabel="turnover rate",
+       title="Turnover rate - forward vs. backward")
+ax.yaxis.set_major_formatter(plt.matplotlib.ticker.PercentFormatter(1.0))
+for i, row in dir_stats.iterrows():
+    ax.text(i, row["to_rate"] + 0.003,
+            f"{row['to_rate']:.0%} ({int(row['turnovers'])}/{int(row['passes'])})",
+            ha="center", fontsize=9)
+plt.tight_layout(); plt.show()
+```
+
+## Turnover breakdown - mechanical, huck, other
+
+A turnover counts as *mechanical* when its comment contains "mechanic" (mechanický, mechanicky, …) and as *huck* when its horizontal span is at least 50 % of the in-field. No turnover currently falls into both buckets, so the categories are disjoint.
+
+```{python}
+#| fig-width: 5.5
+#| fig-height: 3
+turns = df[df["is_turnover"].astype(bool)].copy()
+def classify(r):
+    if r["is_mechanical"]:
+        return "mechanical"
+    if r["is_huck"]:
+        return "huck"
+    return "other"
+turns["kind"] = turns.apply(classify, axis=1)
+order_kind = ["mechanical", "huck", "other"]
+breakdown = turns["kind"].value_counts().reindex(order_kind, fill_value=0)
+share = breakdown / breakdown.sum() if breakdown.sum() else breakdown
+
+fig, ax = plt.subplots(figsize=(5.5, 3))
+sns.barplot(x=share.index.tolist(), y=share.values, ax=ax)
+ax.set(xlabel="", ylabel="share of turnovers",
+       title="Breakdown of turnover causes")
+ax.yaxis.set_major_formatter(plt.matplotlib.ticker.PercentFormatter(1.0))
+for i, (k, v) in enumerate(share.items()):
+    ax.text(i, v + 0.01, f"{v:.0%} ({breakdown[k]})", ha="center", fontsize=9)
+plt.tight_layout(); plt.show()
+```
+
+# Turnover heat-maps
+
+All maps below use turnover passes after normalization (offense → right). Darker = more.
+
+```{python}
+#| label: heatmap-helpers
+def draw_field(ax):
+    ax.set_xlim(0, FIELD_W)
+    ax.set_ylim(FIELD_H, 0)
+    ax.set_aspect("equal")
+    ax.set_facecolor("white")
+    ax.add_patch(plt.Rectangle((0, 0), FIELD_W, FIELD_H, fill=False, edgecolor="#1a1a1a", linewidth=1.2))
+    ax.axvline(EZ_DEPTH, color="#1a1a1a", linewidth=0.8)
+    ax.axvline(FIELD_W - EZ_DEPTH, color="#1a1a1a", linewidth=0.8)
+    ax.annotate("", xy=(FIELD_W/2 + 35, -12), xytext=(FIELD_W/2 - 35, -12),
+                arrowprops=dict(arrowstyle="->", color="#888"),
+                annotation_clip=False)
+    ax.text(FIELD_W/2, -28, "offense", ha="center", fontsize=9, color="#888")
+    ax.grid(False)
+    ax.set_xticks([]); ax.set_yticks([])
+    for s in ax.spines.values(): s.set_visible(False)
+
+turns_df = df[df["is_turnover"].astype(bool)].copy()
+```
+
+## Origin - where turnovers are *thrown from*
+
+```{python}
+#| fig-width: 8
+#| fig-height: 4.2
+fig, ax = plt.subplots(figsize=(8, 4.2))
+draw_field(ax)
+if len(turns_df) >= 3:
+    sns.kdeplot(
+        data=turns_df, x="x1", y="y1",
+        fill=True, cmap="rocket_r", alpha=0.75, levels=12, thresh=0.05, ax=ax,
+        bw_adjust=0.8, clip=((0, FIELD_W), (0, FIELD_H)),
+    )
+ax.scatter(turns_df["x1"], turns_df["y1"], s=18, color="#1a1a1a", marker="x", linewidths=1.2)
+plt.tight_layout(); plt.show()
+```
+
+## Destination - where turnovers *end up*
+
+The intended (or actual) target location of every turnover pass.
+
+```{python}
+#| fig-width: 8
+#| fig-height: 4.2
+fig, ax = plt.subplots(figsize=(8, 4.2))
+draw_field(ax)
+if len(turns_df) >= 3:
+    sns.kdeplot(
+        data=turns_df, x="x2", y="y2",
+        fill=True, cmap="rocket_r", alpha=0.75, levels=12, thresh=0.05, ax=ax,
+        bw_adjust=0.8, clip=((0, FIELD_W), (0, FIELD_H)),
+    )
+ax.scatter(turns_df["x2"], turns_df["y2"], s=22, color="#1a1a1a", marker="o",
+           facecolors="none", linewidths=1.2)
+plt.tight_layout(); plt.show()
+```
+
+## Arrows - every turnover, normalized
+
+Each turnover pass drawn as a red arrow from origin to destination, with the attacking direction unified to the right.
+
+```{python}
+#| fig-width: 8
+#| fig-height: 4.2
+fig, ax = plt.subplots(figsize=(8, 4.2))
+draw_field(ax)
+for _, row in turns_df.iterrows():
+    ax.annotate(
+        "",
+        xy=(row["x2"], row["y2"]), xytext=(row["x1"], row["y1"]),
+        arrowprops=dict(arrowstyle="->", color="#c62828", alpha=0.75, lw=1.3),
+    )
+ax.scatter(turns_df["x1"], turns_df["y1"], s=16, color="#c62828",
+           marker="x", linewidths=1.2)
+plt.tight_layout(); plt.show()
+```
+
+
+# Pass-distance distribution
+
+Distribution of pass horizontal span - completed vs. turnovers. Dashed line marks the huck threshold.
+
+```{python}
+#| fig-width: 7
+#| fig-height: 3.2
+df["abs_dx"] = df["dx"].abs()
+xmax = df["abs_dx"].max() * 1.05
+
+palette = sns.color_palette("deep")
+completed_color = palette[0]
+turnover_color = palette[3]
+
+fig, axes = plt.subplots(2, 1, figsize=(7, 5.2), sharex=True)
+
+# Completed
+sns.histplot(
+    data=df[df["is_turnover"] == 0], x="abs_dx",
+    stat="density", kde=True, bins=40, alpha=0.5,
+    color=completed_color, ax=axes[0],
+)
+axes[0].set(xlabel="horizontal span (px)", ylabel="", title="completed passes")
+axes[0].set_yticks([])
+axes[0].axvline(HUCK_THRESHOLD, linestyle="--", color="#888", linewidth=0.8)
+axes[0].text(HUCK_THRESHOLD + 5, axes[0].get_ylim()[1] * 0.85, "huck", color="#888", fontsize=9)
+
+# Turnovers
+sns.histplot(
+    data=df[df["is_turnover"] == 1], x="abs_dx",
+    stat="density", kde=True, bins=40, alpha=0.5,
+    color=turnover_color, ax=axes[1],
+)
+axes[1].set(xlabel="horizontal span (px)", ylabel="", title="turnovers")
+axes[1].set_yticks([])
+axes[1].axvline(HUCK_THRESHOLD, linestyle="--", color="#888", linewidth=0.8)
+axes[1].text(HUCK_THRESHOLD + 5, axes[1].get_ylim()[1] * 0.85, "huck", color="#888", fontsize=9)
+
+for ax in axes:
+    ax.set_xlim(0, xmax)
+
+plt.tight_layout(); plt.show()
+```
+
+

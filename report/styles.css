@@ -1,0 +1,37 @@
+/* Match the 3SB Stats website style */
+
+body, .quarto-title-banner, .navbar, h1, h2, h3, h4, h5, h6, p, table, .table {
+    font-family: Georgia, "Times New Roman", Times, serif !important;
+}
+
+body {
+    color: #1a1a1a;
+    background: #fff;
+}
+
+h1 { font-weight: normal; font-size: 1.7rem; margin-top: 2.5rem; }
+h2 { font-weight: normal; font-size: 1.25rem; margin-top: 2rem; color: #1a1a1a; }
+h3 { font-weight: normal; font-size: 1.05rem; }
+
+a { color: #1a1a1a; }
+a:hover { color: #999; }
+
+.quarto-title h1.title { font-weight: normal; }
+
+.sidebar nav .nav-link { color: #1a1a1a; }
+.sidebar nav .nav-link:hover { color: #999; }
+.sidebar nav .nav-link.active { color: #1a1a1a; font-weight: bold; }
+
+/* Tables */
+table, .table { border: none; }
+table th { font-weight: normal; border-bottom: 1px solid #1a1a1a; background: none !important; }
+table td { border-bottom: 1px solid #eee; }
+
+/* Callout */
+.callout { border-left: 2px solid #1a1a1a; }
+
+/* Code blocks (rarely shown since echo:false, but just in case) */
+pre, code { font-family: "Courier New", monospace; }
+
+/* Figure captions */
+.figure-caption { color: #888; font-size: 0.85rem; }
